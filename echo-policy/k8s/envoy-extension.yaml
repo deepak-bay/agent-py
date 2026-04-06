@@ -1,0 +1,56 @@
+# ─────────────────────────────────────────────────────────────
+#  EnvoyExtensionPolicy — Echo WASM Policy
+#
+#  This attaches the echo-policy WASM binary to a specific
+#  HTTPRoute.  Each route can set its own "headers-enabled"
+#  value in the configuration JSON.
+# ─────────────────────────────────────────────────────────────
+#
+# Prerequisites:
+#   1. Build the WASM binary:
+#        cd echo-policy
+#        cargo build --target wasm32-wasip1 --release
+#
+#   2. Make `echo_policy.wasm` reachable by Envoy Gateway:
+#        Option A (EKS/remote clusters): upload to S3 (public-read or pre-signed URL)
+#        Option B (local dev): serve it from your current directory over HTTP
+#          cd target/wasm32-wasip1/release && python3 -m http.server 8000
+#
+#   3. Apply this file:
+#        kubectl apply -f envoy-extension.yaml
+# ─────────────────────────────────────────────────────────────
+
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyExtensionPolicy
+metadata:
+  name: echo-policy
+  namespace: envoy-test          # ← change to your namespace
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: mule-test-tls     # ← change to your HTTPRoute name
+  wasm:
+    - name: echo-policy
+      code:
+        type: HTTP
+        http:
+          # Option A (recommended for EKS):
+          # NOTE: Only http/https URLs are supported here (NOT s3:// URIs).
+          # Use either a publicly-readable HTTPS object URL or an AWS pre-signed HTTPS URL.
+          # url: https://a-297562001126-apisix-gateway-eks-alb-us-east-1.s3.us-east-1.amazonaws.com/echo-policy/target/wasm32-wasip1/release/echo_policy.wasm
+          # If this URL returns 403, S3 is denying anonymous GET. Envoy Gateway will not sign AWS requests,
+          # so use a pre-signed URL or make the object publicly readable. Validate with:
+          #   curl -I "<url>"   # should be HTTP 200
+          #
+          # Option B (local dev): serve the wasm from your laptop and point EG at it.
+          # Docker Desktop / kind on macOS often supports host.docker.internal:
+          url: http://127.0.0.1:4040/echo_policy.wasm
+          # sha256 is optional but recommended for integrity verification:
+          sha256: 8f466e3f11abca34f8a6ce68cd6e20bbae883f87e851c5a2224da5d3e2d09885
+      # ──────────────────────────────────────────────
+      #  Per-route configuration
+      #  Set "headers-enabled" to true or false
+      # ──────────────────────────────────────────────
+      config:
+        headers-enabled: true
