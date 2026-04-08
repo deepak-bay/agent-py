@@ -1,0 +1,1 @@
+/Users/gknqt/Downloads/envoy-custom-policy/wasm/envoy-add-client-info-for-azure-ad-token/target/wasm32-wasip1/release/envoy_add_client_info_for_azure_ad_token.wasm: /Users/gknqt/Downloads/envoy-custom-policy/wasm/envoy-add-client-info-for-azure-ad-token/src/lib.rs
