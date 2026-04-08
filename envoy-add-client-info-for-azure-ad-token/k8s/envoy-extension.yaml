@@ -5,20 +5,20 @@ apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: EnvoyExtensionPolicy
 metadata:
   name: add-client-info-for-azure-ad-token
-  namespace: default
+  namespace: envoy-test
 spec:
   targetRefs:
     - group: gateway.networking.k8s.io
       kind: HTTPRoute
-      name: my-http-route
+      name: httpbin-adapter-test-azuread-extension-policy
   wasm:
     - name: add-client-info-for-azure-ad-token
       code:
         type: HTTP
         http:
           # url: https://your-bucket.s3.amazonaws.com/envoy_add_client_info_for_azure_ad_token.wasm
-                    url: https://raw.githubusercontent.com/deepak-bay/agent-py/main/echo-policy/releases/echo_policy.wasm
+          url: https://raw.githubusercontent.com/deepak-bay/agent-py/main/envoy-add-client-info-for-azure-ad-token/releases/envoy_add_client_info_for_azure_ad_token.wasm
           # sha256 is optional but recommended for integrity verification:
-          sha256: 8f466e3f11abca34f8a6ce68cd6e20bbae883f87e851c5a2224da5d3e2d09885
+          sha256: 3a1958461181d71e7c40b0ee120554379e7b3c7c17d88dce04158bce2a2b417f
       config:
         log_level: "info"
