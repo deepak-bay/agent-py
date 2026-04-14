@@ -1,0 +1,63 @@
+# ─────────────────────────────────────────────────────────────
+#  Combined EnvoyExtensionPolicy — Multiple WASM Modules
+#
+#  This demonstrates how to apply MULTIPLE WASM policies to a
+#  single HTTPRoute. Envoy Gateway enforces one-policy-per-route,
+#  but each policy can contain multiple WASM modules.
+#
+#  Execution order: WASM modules execute in the array order below.
+# ─────────────────────────────────────────────────────────────
+
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyExtensionPolicy
+metadata:
+  name: combined-wasm-policy
+  namespace: envoy-test
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: httpbin-adapter-test-bro # ← your target route
+
+  # ──────────────────────────────────────────────────────────
+  # Multiple WASM modules in execution order:
+  #   1. echo-policy runs first
+  #   2. add-client-info-for-azure-ad-token runs second
+  # ──────────────────────────────────────────────────────────
+  wasm:
+    # ═══════════════════════════════════════════════════════
+    # WASM Module 2: Azure AD Client Info
+    # ═══════════════════════════════════════════════════════
+    - name: add-client-info-for-azure-ad-token
+      code:
+        type: HTTP
+        http:
+          url: https://raw.githubusercontent.com/deepak-bay/agent-py/main/envoy-add-client-info-for-azure-ad-token/releases/envoy_add_client_info_for_azure_ad_token.wasm
+          sha256: 3a1958461181d71e7c40b0ee120554379e7b3c7c17d88dce04158bce2a2b417f
+      config:
+        log_level: "info"
+      failOpen: false
+
+    # ═══════════════════════════════════════════════════════
+    # WASM Module 1: Echo Policy (passthrough mode for rate limiting)
+    # ═══════════════════════════════════════════════════════
+    - name: echo-policy
+      code:
+        type: HTTP
+        http:
+          url: https://raw.githubusercontent.com/deepak-bay/agent-py/main/echo-policy/releases/echo_policy.wasm
+          sha256: ec102765dfdebc2d3f4097577569cad89b784941bba7219c7c27609b66a3f3e5
+      config:
+        headers-enabled: true
+        passthrough: true  # ← Enable passthrough to allow rate limiting
+      failOpen: false
+    # ═══════════════════════════════════════════════════════
+    # Add more WASM modules as needed (up to 20+)
+    # ═══════════════════════════════════════════════════════
+    # - name: policy-3
+    #   code:
+    #     type: HTTP
+    #     http:
+    #       url: https://...
+    #   config:
+    #     key: value
