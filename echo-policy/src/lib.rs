@@ -160,7 +160,7 @@ impl HttpContext for EchoHttp {
         let headers = self.get_http_request_headers();
         let body = self.build_echo_response(headers);
         self.send_http_response(200, vec![("content-type", "application/json")], Some(body.as_bytes()));
-        Action::Pause
+        Action::continue
     }
 
     fn on_http_request_body(&mut self, body_size: usize, end_of_stream: bool) -> Action {
@@ -170,14 +170,14 @@ impl HttpContext for EchoHttp {
         }
 
         if !end_of_stream {
-            return Action::Pause; // wait for rest of body
+            return Action::continue; // wait for rest of body
         }
 
         // Full body received — respond
         let headers = self.get_http_request_headers();
         let body = self.build_echo_response(headers);
         self.send_http_response(200, vec![("content-type", "application/json")], Some(body.as_bytes()));
-        Action::Pause
+        Action::continue
     }
 }
 
