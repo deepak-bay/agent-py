@@ -8,16 +8,18 @@ use std::time::{Duration, UNIX_EPOCH};
 // ──────────────────────────────────────────────
 
 /// Plugin configuration passed via EnvoyExtensionPolicy `configuration` field.
-/// Example: {"headers-enabled": true}
+/// Example: {"headers-enabled": true, "passthrough": false}
 #[derive(Clone)]
 struct EchoConfig {
     headers_enabled: bool,
+    passthrough: bool,  // If true, don't send response - let request continue to backend
 }
 
 impl Default for EchoConfig {
     fn default() -> Self {
         EchoConfig {
             headers_enabled: true, // safe default: echo everything
+            passthrough: false,    // default: echo response (original behavior)
         }
     }
 }
@@ -33,10 +35,16 @@ impl RootContext for EchoRoot {
     fn on_configure(&mut self, _config_size: usize) -> bool {
         if let Some(bytes) = self.get_plugin_configuration() {
             if let Ok(text) = String::from_utf8(bytes) {
+                log::info!("Echo policy config: {}", text);
                 if let Ok(v) = serde_json::from_str::<Value>(&text) {
                     if let Some(enabled) = v.get("headers-enabled") {
                         self.config.headers_enabled =
                             enabled.as_bool().unwrap_or(true);
+                    }
+                    if let Some(passthrough) = v.get("passthrough") {
+                        self.config.passthrough =
+                            passthrough.as_bool().unwrap_or(false);
+                        log::info!("Echo policy passthrough mode: {}", self.config.passthrough);
                     }
                 }
             }
@@ -147,6 +155,12 @@ impl EchoHttp {
 
 impl HttpContext for EchoHttp {
     fn on_http_request_headers(&mut self, _num_headers: usize, _end_of_stream: bool) -> Action {
+        // Passthrough mode: don't intercept, let request go to backend
+        if self.config.passthrough {
+            log::info!("Echo policy: passthrough mode - continuing to backend");
+            return Action::Continue;
+        }
+
         let method = self
             .get_http_request_header(":method")
             .unwrap_or_default();
@@ -160,24 +174,29 @@ impl HttpContext for EchoHttp {
         let headers = self.get_http_request_headers();
         let body = self.build_echo_response(headers);
         self.send_http_response(200, vec![("content-type", "application/json")], Some(body.as_bytes()));
-        Action::continue
+        Action::Pause
     }
 
     fn on_http_request_body(&mut self, body_size: usize, end_of_stream: bool) -> Action {
+        // Passthrough mode: don't intercept
+        if self.config.passthrough {
+            return Action::Continue;
+        }
+
         // Accumulate body bytes
         if let Some(chunk) = self.get_http_request_body(0, body_size) {
             self.request_body.extend_from_slice(&chunk);
         }
 
         if !end_of_stream {
-            return Action::continue; // wait for rest of body
+            return Action::Pause; // wait for rest of body
         }
 
         // Full body received — respond
         let headers = self.get_http_request_headers();
         let body = self.build_echo_response(headers);
         self.send_http_response(200, vec![("content-type", "application/json")], Some(body.as_bytes()));
-        Action::continue
+        Action::Pause
     }
 }
 
