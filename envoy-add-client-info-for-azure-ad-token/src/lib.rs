@@ -25,8 +25,10 @@ impl Context for RootCtx {}
 
 impl RootContext for RootCtx {
     fn on_configure(&mut self, _config_size: usize) -> bool {
+        log::warn!("AzureAD WASM: RootContext on_configure called!");
         if let Some(bytes) = self.get_plugin_configuration() {
             if let Ok(text) = String::from_utf8(bytes) {
+                log::warn!("AzureAD WASM: Config received: {}", text);
                 if let Ok(cfg) = serde_json::from_str::<Config>(&text) {
                     self.config = cfg;
                 }
@@ -59,10 +61,18 @@ impl Context for HttpCtx {}
 
 impl HttpContext for HttpCtx {
     fn on_http_request_headers(&mut self, _num_headers: usize, _end_of_stream: bool) -> Action {
+        log::warn!("AzureAD WASM: on_http_request_headers called");
+        
         // Get Authorization header
         let auth_header = match self.get_http_request_header("authorization") {
-            Some(h) => h,
-            None => return Action::Continue,
+            Some(h) => {
+                log::warn!("AzureAD WASM: Found Authorization header");
+                h
+            },
+            None => {
+                log::warn!("AzureAD WASM: No Authorization header found");
+                return Action::Continue;
+            }
         };
         
         // Extract Bearer token
@@ -96,6 +106,7 @@ impl HttpContext for HttpCtx {
         };
         
         // Extract and set claims as headers
+        log::warn!("AzureAD WASM: JWT decoded successfully, extracting claims");
         
         // x-bayer-user (from given_name + family_name or name)
         let user_name = if let (Some(given), Some(family)) = (
@@ -111,16 +122,19 @@ impl HttpContext for HttpCtx {
         };
         
         if !user_name.is_empty() {
+            log::warn!("AzureAD WASM: Setting x-bayer-user={}", user_name);
             self.set_http_request_header("x-bayer-user", Some(&user_name));
         }
         
         // x-bayer-cwid (from cwid claim)
         if let Some(cwid) = claims.get("cwid").and_then(|v| v.as_str()) {
+            log::warn!("AzureAD WASM: Setting x-bayer-cwid={}", cwid);
             self.set_http_request_header("x-bayer-cwid", Some(cwid));
         }
         
         // oauth_clientid (from appid claim)
         if let Some(appid) = claims.get("appid").and_then(|v| v.as_str()) {
+            log::warn!("AzureAD WASM: Setting oauth_clientid={}", appid);
             self.set_http_request_header("oauth_clientid", Some(appid));
         }
         
@@ -128,12 +142,14 @@ impl HttpContext for HttpCtx {
         if let Some(roles) = claims.get("roles") {
             if roles.is_array() {
                 let roles_str = roles.to_string();
+                log::warn!("AzureAD WASM: Setting x-bayer-groups");
                 self.set_http_request_header("x-bayer-groups", Some(&roles_str));
             }
         }
         
         // x-bayer-user-profile (from unique_name)
         if let Some(unique_name) = claims.get("unique_name").and_then(|v| v.as_str()) {
+            log::warn!("AzureAD WASM: Setting x-bayer-user-profile={}", unique_name);
             self.set_http_request_header("x-bayer-user-profile", Some(unique_name));
         }
         
